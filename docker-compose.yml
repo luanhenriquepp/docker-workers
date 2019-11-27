@@ -1,0 +1,62 @@
+version: '3'
+volumes:
+  dados:
+networks: 
+  banco:
+  web:
+  fila:      
+services:
+  db:
+    image: postgres
+    volumes:
+      # Volume dos dados
+      - dados:/var/lib/postgresql/data
+      # Scripts
+      - ./scripts:/scripts
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: 
+      - banco
+  frontend:
+    image: nginx
+    volumes:
+      # Site
+      - ./web:/usr/share/nginx/html/
+      # Configuração do proxy
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    ports:
+      - 80:80
+    networks: 
+      - web
+    depends_on:
+      - app    
+  app:
+    image: python
+    volumes:
+      # Aplicação
+      - ./app:/app
+    working_dir: /app
+    command: bash ./app.sh
+    networks: 
+      - banco
+      - web
+      - fila
+    depends_on:
+      - db  
+      - queue
+    environment:
+      - DB_NAME=email_sender  
+  queue:
+    image: redis
+    networks: 
+    - fila
+  worker:
+    # Worker
+    build: worker
+    volumes:
+      - ./worker:/worker 
+    working_dir: /worker
+    command: worker.py
+    networks: 
+      - fila
+    depends_on:
+      - queue           
